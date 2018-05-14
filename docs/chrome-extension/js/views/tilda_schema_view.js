@@ -5,7 +5,7 @@ define(['text!../templates/tilda_schema/_new.html',
     console.log(error.message);
     console.log(error.stack);
   }
-
+  window.renderedCache = {};
   var svgHTML = {}
   var defaultCanvases = [{name: "object", title: "Tables Graph", package: null, viewOnly: false}, {name: "view", title: "Views Graph", package: null, viewOnly: true}];
   svgHTML["object"] = { name: "Tables Graph", svg: null };
@@ -25,7 +25,7 @@ define(['text!../templates/tilda_schema/_new.html',
       if(value != null)
       {
         value.package = package;
-        var p = new _Parser(fName, "obj_c", {viewOnly: value.viewOnly, package: value.package});
+        var p = new _Parser(fName, "obj_c", {viewOnly: value.viewOnly, package: value.package, name: value.name, scale: value.scale});
         svgHTML[value.name] = svgHTML[value.name] || {};
         svgHTML[value.name]["svg"] = p.paper.$el.find("svg")[0].parentElement.innerHTML;
       }
@@ -36,7 +36,7 @@ define(['text!../templates/tilda_schema/_new.html',
     var reader = entry.createReader();
     var errorCallback = function(e) {
       console.error(e);
-    }
+    };
     var $select = viewScope.$el.find('select.schemas');
     viewScope.$el.find('.actions').hide();
     var f = new _FileSearch(entry, viewScope.excludeRegex, function(files){
@@ -145,6 +145,7 @@ define(['text!../templates/tilda_schema/_new.html',
       $('#createCanvasD').modal('hide');      
       $("#canvas_name").val('');
       $("#new_canvas").val(1);
+      $('select.add-view-holder').trigger('change');
     },
     saveRegex: function(event){
       var value = $('.regex-f').val();
@@ -165,10 +166,14 @@ define(['text!../templates/tilda_schema/_new.html',
         that.packageInfo = pkgInfo;
         that.initCache(objectEntries.cacheEntry).then(function(cache){
           window.tildaCache = cache;
+          var t= {};
+          $("select.add-view-holder").html('');
+          $("select.add-view-holder").append("<option value=''>--- select a canvas ---</option>");
           $.each(tildaCache.canvases, function(key, v)
           {
-            if(v != null)
+            if(v != null && t[v.name] == null)
             {
+              t[v.name] = v.name;
               $("select.add-view-holder").append("<option value='"+v.name+"'>"+v.name+"</option>");
             }
           })
@@ -179,9 +184,10 @@ define(['text!../templates/tilda_schema/_new.html',
           var reader = new FileReader();
           reader.onload = function(e) {
             var schema = JSON.parse(e.target.result);
-            olderViewName = "object";
+            // olderViewName = "object";
             populateSVGHTML(tildaCache.canvases, schemaFname, schema.package);
-            that.schemaParser_object = new _Parser(schemaFname, "obj_c", {viewOnly: false, package: schema.package});
+            that.$el.find("#obj_c").html("");
+            // that.schemaParser_object = new _Parser(schemaFname, "obj_c", {viewOnly: false, package: schema.package, name: "object"});
           }
           schemaEntry.file(function(schemaEntryF){
             reader.readAsText(schemaEntryF);
@@ -208,6 +214,10 @@ define(['text!../templates/tilda_schema/_new.html',
     togglePapers: function(event){
       var schemaFname = $('select.schemas').val();
       var selectValue = $(event.target).val();
+      if(schemaFname == null || selectValue == null || schemaFname.length == 0 || selectValue.length == 0)
+      {
+        return false;
+      }
       $('.renameCanvas').parent().addClass('hidden');
       $('.deleteCanvas').parent().addClass('hidden');
       if(selectValue != 'object' || selectValue != 'view')
@@ -216,7 +226,10 @@ define(['text!../templates/tilda_schema/_new.html',
         $('.deleteCanvas').parent().removeClass('hidden');
       }
       var that = this;
-      svgHTML[olderViewName]["svg"] = this.$el.find("#obj_c").find("svg")[0].parentElement.innerHTML;
+      if(olderViewName != null)
+      {
+        svgHTML[olderViewName]["svg"] = this.$el.find("#obj_c").find("svg")[0].parentElement.innerHTML;
+      }
       var schemaEntry = this.schemaEntries[schemaFname];
       var reader = new FileReader();
       this.$el.find("#obj_c").html("");
@@ -226,7 +239,7 @@ define(['text!../templates/tilda_schema/_new.html',
         {
           return canvas!= null && canvas.name == selectValue;
         })[0]
-        that.schemaParser_object = new _Parser(schemaFname, "obj_c", {viewOnly: canvasConfig.viewOnly, package: canvasConfig.package});
+        that.schemaParser_object = new _Parser(schemaFname, "obj_c", {viewOnly: canvasConfig.viewOnly, package: canvasConfig.package, name: canvasConfig.name, scale: canvasConfig.scale});
       }
       olderViewName = selectValue;
       schemaEntry.file(function(schemaEntryF){
@@ -258,7 +271,7 @@ define(['text!../templates/tilda_schema/_new.html',
           var reader = new FileReader();
           reader.onload = function(event) {
             try{
-              var tildaCache = JSON.parse(event.target.result) || {};
+              var tildaCache = event.target.result.length > 0 ? (JSON.parse(event.target.result) || {}) : {};
               tildaCache.canvases = tildaCache.canvases || defaultCanvases;
               resolve(tildaCache);
             } catch(e){
@@ -287,8 +300,11 @@ define(['text!../templates/tilda_schema/_new.html',
         console.log(error.stack);
       }
       chrome.fileSystem.chooseEntry({ type: 'openDirectory'},  function(entry) {
-        that.savedEntry = entry;
-        fileInputHandler(that, entry);
+        if(entry != null)
+        {
+          that.savedEntry = entry;
+          fileInputHandler(that, entry);
+        }
       });
       return 0;
     },
@@ -354,13 +370,6 @@ define(['text!../templates/tilda_schema/_new.html',
             });
             var blob = new Blob(blobArr, {type: "image/svg"});
             fileWriter.onwriteend = function(e) {
-              if (!truncated) {
-                truncated = true;
-                // You need to explicitly set the file size to truncate
-                // any content that might have been there before
-                this.truncate(blob.size);
-                return;
-              }
               console.log('Export to '+fileDisplayPath+' completed');
             };
             fileWriter.onerror = function(e) {
@@ -377,13 +386,6 @@ define(['text!../templates/tilda_schema/_new.html',
         fileEntry.createWriter(function(fileWriter) {
           var blob = new Blob([JSON.stringify(window.tildaCache,null,2)]);
           fileWriter.onwriteend = function(e) {
-            if (!truncated) {
-              truncated = true;
-              // You need to explicitly set the file size to truncate
-              // any content that might have been there before
-              this.truncate(blob.size);
-              return;
-            }
             console.log('Export to '+fileDisplayPath+' completed');
           };
           fileWriter.onerror = function(e) {

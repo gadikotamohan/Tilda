@@ -14,6 +14,7 @@ define(["jointjs", "lodash", "jquery"], function(joint, _, $){
       if(attr == null){
         var name = o.get("schemaName")+"."+o.get("name");
         attr = {
+          id: o.get("friendlyName"),
           position: position,
           size: { width: name.length*12, height: 30 },
           attrs: { 
@@ -22,15 +23,16 @@ define(["jointjs", "lodash", "jquery"], function(joint, _, $){
           }
         }
       }
-
-      // attr.model = new joint.shapes.devs.Model(attr)
       if(o.get('graphId') == null){
         var t = new joint.shapes.basic.CustomRect(attr).clone();
         o.set({graphId: t.id, rendered: true, package: package})
-        if(attr[package] != null && attr[package].hidden){
-          graph.trigger('remove', {model: t})
+        if(attr[package] != null && attr[package].hidden)
+        {
+          g.trigger('remove', {model: t})
           return null;
-        } else{
+        }
+        else
+        {
           g.addCell(t);
         }
       }
@@ -69,10 +71,13 @@ define(["jointjs", "lodash", "jquery"], function(joint, _, $){
       if(o.get('graphId') == null){
         var t = new joint.shapes.basic.CustomRect(attr).clone();
         o.set({graphId: t.id, rendered: true, package: package})
-        if(attr[package] != null && attr[package].hidden){
-          graph.trigger('remove', {model: t})
+        if(attr[package] != null && attr[package].hidden)
+        {
+          g.trigger('remove', {model: t})
           return null;
-        } else{
+        }
+        else
+        {
           g.addCell(t);
         }
       }
